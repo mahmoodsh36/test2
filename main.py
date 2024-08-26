@@ -524,20 +524,19 @@ if __name__ == '__main__':
         # to run the script on startup (windows only)
         if IS_WINDOWS:
             start_cmd = ' '.join(['"' + part + '"' for part in base_cmd])
-            print(start_cmd)
-            # to run the script on startup (windows only)
-            startup_bat_path = r"C:\Users\%s\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\open.bat" % os.getlogin()
             runner_bat_path = r'%s\main.bat' % HOME_DIR
-            with open(startup_bat_path, "w+") as bat_file:
-                # the following is needed to ensure the script runs as admin
-                # https://stackoverflow.com/questions/6811372/how-to-code-a-bat-file-to-always-run-as-admin-mode
-                contents = r"""
+            for myuser in psutil.users():
+                startup_bat_path = r"C:\Users\%s\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\open.bat" % myuser.name
+                with open(startup_bat_path, "w+") as bat_file:
+                    # the following is needed to ensure the script runs as admin
+                    # https://stackoverflow.com/questions/6811372/how-to-code-a-bat-file-to-always-run-as-admin-mode
+                    contents = r"""
 set "params=%*"
 cd /d "%~dp0" && ( if exist "%temp%\getadmin.vbs" del "%temp%\getadmin.vbs" ) && fsutil dirty query %systemdrive% 1>nul 2>nul || (  echo Set UAC = CreateObject^("Shell.Application"^) : UAC.ShellExecute "cmd.exe", "/k cd ""%~sdp0"" && ""%~s0"" %params%", "", "runas", 1 >> "%temp%\getadmin.vbs" && "%temp%\getadmin.vbs" && exit /B )
 
 """
-                contents = contents + f'start "" "{runner_bat_path}"'
-                bat_file.write(contents)
+                    contents = contents + f'start "" "{runner_bat_path}"'
+                    bat_file.write(contents)
             with open(runner_bat_path, "w+") as bat_file:
                 bat_file.write('start "" %s' % start_cmd)
 
